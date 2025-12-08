@@ -97,7 +97,10 @@ RAG/
 │   ├── sematic_text_splitter.py   # Semantic chunking (meaning preservation)
 │   └── agentic_chunking.py        # AI-powered intelligent chunking
 │
-├── 📁 docs/
+├── � all_retrieval_method.py      # Compare similarity, threshold & MMR retrieval
+├── 📄 multi_query_retrieval.py     # Multi-query expansion with LLM
+│
+├── �📁 docs/
 │   ├── google.txt                 # Google company information
 │   ├── microsoft.txt              # Microsoft company information
 │   ├── nvidia.txt                 # NVIDIA company information
@@ -159,6 +162,9 @@ Create a `.env` file in the project root:
 ```env
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
+
+# OpenRouter Configuration (for Multi-Query Retrieval)
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 
 # Optional: Model Configuration
 OPENAI_MODEL=gpt-4-turbo-preview
@@ -223,7 +229,58 @@ python "RAG pipeline/answer_generation.py"
 - 📝 Cites source documents
 - ⚡ Handles multi-document queries
 
-### 4️⃣ Conversational RAG
+### 5️⃣ Advanced Retrieval Methods
+
+Compare different retrieval strategies:
+
+```bash
+python all_retrieval_method.py
+```
+
+**This will demonstrate:**
+- ✅ Basic similarity search (top-K retrieval)
+- ✅ Score threshold filtering (quality control)
+- ✅ Maximum Marginal Relevance (diversity optimization)
+
+**Example Output:**
+```
+=== METHOD 1: Basic similarity search ===
+Retrieved 3 documents
+
+=== METHOD 2: Similarity with Score Threshold ===
+Retrieved 2 documents (threshold: 0.45)
+
+=== METHOD 3: Maximum Marginal Relevance (MMR) ===
+Retrieved 3 documents (λ=0.5)
+```
+
+### 6️⃣ Multi-Query Retrieval
+
+Use LLM-powered query expansion for comprehensive search:
+
+```bash
+python multi_query_retrieval.py
+```
+
+**Features:**
+- 🤖 Automatically generates 3 query variations using GPT-4o-mini
+- 🔍 Searches with each variation for broader coverage
+- 📊 Aggregates results from multiple perspectives
+
+**Example:**
+```
+Original Query: How does Tesla make money?
+
+Generated Query Variations:
+1. What are Tesla's primary revenue streams?
+2. How does Tesla generate income and profits?
+3. What business models does Tesla use to earn revenue?
+
+=== RESULTS FOR QUERY 1 ===
+Retrieved 5 documents...
+```
+
+### 7️⃣ Conversational RAG
 
 Interactive question-answering with conversation history:
 
@@ -236,7 +293,7 @@ python "RAG pipeline/history_aware_generation.py"
 - 🧠 Context-aware follow-up questions
 - 🔄 Automatic conversation history management
 
-### 5️⃣ Jupyter Notebook Demo
+### 8️⃣ Jupyter Notebook Demo
 
 Explore the interactive demo:
 
@@ -418,6 +475,133 @@ retriever = db.as_retriever(
 
 ---
 
+## 🔍 Advanced Retrieval Methods
+
+The pipeline supports multiple sophisticated retrieval strategies to optimize document search quality and relevance:
+
+### Method 1: Basic Similarity Search
+
+**File:** `all_retrieval_method.py`
+
+The standard vector similarity search retrieves the top-K most similar documents based on cosine similarity:
+
+```python
+retriever = db.as_retriever(search_kwargs={"k": 3})
+docs = retriever.invoke(query)
+```
+
+**Best For:**
+- ✅ General purpose queries
+- ✅ Fast retrieval needs
+- ✅ Balanced relevance
+
+---
+
+### Method 2: Similarity with Score Threshold
+
+**File:** `all_retrieval_method.py`
+
+Filters results to only return documents exceeding a minimum similarity threshold, ensuring high-quality matches:
+
+```python
+retriever = db.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={
+        "k": 3,
+        "score_threshold": 0.45  # Only return docs with similarity >= 0.45
+    }
+)
+```
+
+**Best For:**
+- ✅ High-precision requirements
+- ✅ Filtering low-quality matches
+- ✅ Strict relevance criteria
+
+**Parameters:**
+- `k`: Maximum number of documents to retrieve
+- `score_threshold`: Minimum similarity score (0.0 to 1.0)
+
+---
+
+### Method 3: Maximum Marginal Relevance (MMR)
+
+**File:** `all_retrieval_method.py`
+
+Balances relevance and diversity to avoid redundant results by selecting documents that are both relevant to the query and diverse from each other:
+
+```python
+retriever = db.as_retriever(
+    search_type="mmr",
+    search_kwargs={
+        "k": 3,           # Final number of docs
+        "fetch_k": 10,    # Initial pool to select from
+        "lambda_mult": 0.5  # 0=max diversity, 1=max relevance
+    }
+)
+```
+
+**Best For:**
+- ✅ Avoiding redundant information
+- ✅ Comprehensive topic coverage
+- ✅ Diverse perspectives
+
+**Parameters:**
+- `k`: Number of documents to return
+- `fetch_k`: Initial candidate pool size
+- `lambda_mult`: Balance factor
+  - `0.0` = Maximum diversity
+  - `1.0` = Maximum relevance
+  - `0.5` = Balanced approach
+
+---
+
+### Method 4: Multi-Query Retrieval
+
+**File:** `multi_query_retrieval.py`
+
+Advanced technique that generates multiple query variations using an LLM to improve retrieval coverage and handle complex questions:
+
+```python
+# Step 1: Generate query variations using LLM
+original_query = "How does Tesla make money?"
+llm_with_tools = llm.with_structured_output(QueryVariations)
+query_variations = llm_with_tools.invoke(prompt).queries
+
+# Step 2: Search with each variation
+retriever = db.as_retriever(search_kwargs={"k": 5})
+for query in query_variations:
+    docs = retriever.invoke(query)
+    all_retrieval_results.append(docs)
+```
+
+**Best For:**
+- ✅ Complex, multi-faceted queries
+- ✅ Ambiguous questions
+- ✅ Comprehensive information gathering
+- ✅ Handling varied phrasings
+
+**How It Works:**
+1. **Query Expansion:** LLM generates 3 alternative phrasings of the original query
+2. **Parallel Retrieval:** Each variation searches the vector database independently
+3. **Result Aggregation:** Combines results for comprehensive coverage
+
+**Technologies:**
+- `OpenAI GPT-4o-mini` via OpenRouter - Query variation generation
+- `Pydantic` - Structured output validation
+- `ChromaDB` - Multi-query vector search
+
+**Example Query Variations:**
+
+Original: *"How does Tesla make money?"*
+
+Generated Variations:
+1. "What are Tesla's primary revenue streams?"
+2. "How does Tesla generate income and profits?"
+3. "What business models does Tesla use to earn revenue?"
+
+---
+
 ## 🧪 Technologies Used
 
 | Category | Technology |
@@ -426,8 +610,10 @@ retriever = db.as_retriever(
 | **Embeddings** | ![HuggingFace](https://img.shields.io/badge/HuggingFace-Transformers-yellow) |
 | **Vector DB** | ![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-orange) |
 | **LLM** | ![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-blue) |
+| **LLM Router** | ![OpenRouter](https://img.shields.io/badge/OpenRouter-API-purple) |
 | **Language** | ![Python](https://img.shields.io/badge/Python-3.11+-blue) |
 | **Notebook** | ![Jupyter](https://img.shields.io/badge/Jupyter-Interactive-orange) |
+| **Validation** | ![Pydantic](https://img.shields.io/badge/Pydantic-Structured%20Output-red) |
 
 ---
 
