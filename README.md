@@ -43,7 +43,7 @@ This **Multimodal RAG Pipeline** is a sophisticated document retrieval and quest
 
 The ingestion pipeline processes source documents through chunking, embedding, and storage:
 
-![Ingestion Pipeline Architecture](architecture_ingestion.png)
+![Ingestion Pipeline Architecture](images/architecture_ingestion.png)
 
 **Pipeline Flow:**
 1. **Source Documents** (~10M tokens) → Raw text files from various sources
@@ -57,7 +57,7 @@ The ingestion pipeline processes source documents through chunking, embedding, a
 
 The retrieval pipeline handles user queries and generates contextual answers:
 
-![Retrieval Pipeline Architecture](architecture_retrieval.png)
+![Retrieval Pipeline Architecture](images/architecture_retrieval.png)
 
 **Pipeline Flow:**
 1. **User Query** → Natural language question input
@@ -97,10 +97,16 @@ RAG/
 │   ├── sematic_text_splitter.py   # Semantic chunking (meaning preservation)
 │   └── agentic_chunking.py        # AI-powered intelligent chunking
 │
-├── � all_retrieval_method.py      # Compare similarity, threshold & MMR retrieval
+├── 📄 all_retrieval_method.py      # Compare similarity, threshold & MMR retrieval
 ├── 📄 multi_query_retrieval.py     # Multi-query expansion with LLM
+├── 📄 reciprocal_rank_fusion.py    # RRF for combining multi-query results
 │
-├── �📁 docs/
+├── 📁 images/                      # Visual documentation and diagrams
+│   ├── rrf_simple_explanation.png # RRF concept visualization
+│   ├── rrf_k60_example.png        # RRF calculation with k=60
+│   └── rrf_key_takeaways.png      # RRF benefits summary
+│
+├── 📁 docs/
 │   ├── google.txt                 # Google company information
 │   ├── microsoft.txt              # Microsoft company information
 │   ├── nvidia.txt                 # NVIDIA company information
@@ -279,6 +285,42 @@ Generated Query Variations:
 === RESULTS FOR QUERY 1 ===
 Retrieved 5 documents...
 ```
+
+### 4️⃣ Reciprocal Rank Fusion
+
+Combine multiple query results using advanced RRF scoring:
+
+```bash
+python reciprocal_rank_fusion.py
+```
+
+**Features:**
+- 🤖 Generates query variations using GPT-4o-mini
+- 🔍 Retrieves documents for each variation
+- 📊 Applies RRF algorithm to create consensus ranking
+- 🎯 Boosts documents appearing in multiple results
+
+**Example Output:**
+```
+Original Query: How does Tesla make money?
+
+Generated Query Variations:
+1. What are Tesla's primary revenue streams?
+2. How does Tesla generate income and profits?
+3. What business models does Tesla use to earn revenue?
+
+=== Reciprocal Rank Fusion ===
+Using k=60 for RRF calculation
+
+Processing Query 1 results:
+Chunk_1 (position 1): 0.0164
+Chunk_2 (position 2): 0.0161
+...
+
+=== Fused Results ===
+Final ranking based on consensus across all queries
+```
+
 
 ### 7️⃣ Conversational RAG
 
@@ -599,6 +641,130 @@ Generated Variations:
 1. "What are Tesla's primary revenue streams?"
 2. "How does Tesla generate income and profits?"
 3. "What business models does Tesla use to earn revenue?"
+
+---
+
+### Method 5: Reciprocal Rank Fusion (RRF)
+
+**File:** `reciprocal_rank_fusion.py`
+
+Reciprocal Rank Fusion is an advanced ensemble technique that combines multiple retrieval results by aggregating ranking positions. It's particularly powerful when used with multi-query retrieval to create a "consensus" ranking that boosts documents appearing in multiple result sets.
+
+#### 🎯 How RRF Works
+
+![RRF Simple Explanation](images/rrf_simple_explanation.png)
+
+**The RRF Formula:**
+
+```
+RRF_score = Σ (1 / (k + rank_position))
+```
+
+Where:
+- `k` = constant (typically 60) to prevent over-emphasizing top positions
+- `rank_position` = position of document in each retrieval result
+- The sum is calculated across all queries that retrieved this document
+
+#### 📊 RRF with k=60 Example
+
+![RRF k=60 Example](images/rrf_k60_example.png)
+
+**Why k=60?**
+
+The constant `k=60` provides balance in the scoring:
+- Higher positions still matter: `1/(60+1) = 0.0164`
+- Lower positions get fair consideration: `1/(60+5) = 0.0154`
+- Documents appearing in multiple queries get significantly higher scores through accumulation
+
+**Example Calculation:**
+
+If "Document X" appears in 2 different query results:
+- Query 1, Position 1: `1/(60+1) = 0.0164`
+- Query 2, Position 2: `1/(60+2) = 0.0161`
+- **Total RRF Score: 0.0325** ← Much higher than single-query documents!
+
+#### 💡 Key Takeaways
+
+![RRF Key Takeaways](images/rrf_key_takeaways.png)
+
+**Benefits of RRF:**
+
+1. ✅ **Consensus Effect** - Documents appearing in multiple query results get boosted
+2. ✅ **Balanced Scoring** - k=60 prevents over-emphasis on top positions while maintaining order
+3. ✅ **Diversity Preservation** - Unique chunks from each query still contribute to final ranking
+4. ✅ **Simple but Effective** - Despite simplicity, RRF often outperforms complex fusion methods
+5. ✅ **No Training Required** - Works immediately without parameter tuning or model training
+
+#### 🚀 Implementation
+
+```python
+from collections import defaultdict
+
+def reciprocal_rank_fusion(chunk_list, k=60, verbose=True):
+    """
+    Calculate RRF scores for documents retrieved from multiple queries.
+    
+    Args:
+        chunk_list: List of retrieval results (each is a list of document chunks)
+        k: RRF constant (default: 60)
+        verbose: Print detailed scoring information
+    
+    Returns:
+        List of document chunks sorted by RRF score (highest first)
+    """
+    rrf_scores = defaultdict(float)
+    all_unique_chunks = {}
+    
+    # Calculate RRF scores across all queries
+    for query_idx, chunks in enumerate(chunk_list, 1):
+        for position, chunk in enumerate(chunks, 1):
+            chunk_content = chunk.page_content
+            
+            # Store chunk object
+            all_unique_chunks[chunk_content] = chunk
+            
+            # Accumulate RRF score: 1/(k + position)
+            position_score = 1 / (k + position)
+            rrf_scores[chunk_content] += position_score
+    
+    # Sort by RRF score (highest first)
+    sorted_chunks = sorted(
+        all_unique_chunks.items(),
+        key=lambda x: rrf_scores[x[0]],
+        reverse=True
+    )
+    
+    return [chunk_obj for chunk_content, chunk_obj in sorted_chunks]
+
+# Example usage with multi-query retrieval
+all_retrieval_results = []
+for query in query_variations:
+    docs = retriever.invoke(query)
+    all_retrieval_results.append(docs)
+
+# Fuse results using RRF
+fused_results = reciprocal_rank_fusion(all_retrieval_results, k=60)
+```
+
+#### 🎯 Best For:
+
+- ✅ **Multi-query retrieval** - Combining results from query variations
+- ✅ **Cross-lingual search** - Merging results from different language queries
+- ✅ **Multi-modal retrieval** - Fusing text, image, and other retrieval results
+- ✅ **Ensemble methods** - Combining outputs from different retrieval algorithms
+- ✅ **Improving recall** - Ensuring diverse, relevant documents aren't missed
+
+#### 🔬 When to Use RRF vs Other Methods
+
+| Method | Best Use Case | Strength |
+|--------|--------------|----------|
+| **Basic Similarity** | Single simple query | Fast, straightforward |
+| **Score Threshold** | High precision needs | Quality filtering |
+| **MMR** | Avoiding redundancy | Diversity within single query |
+| **Multi-Query** | Complex questions | Multiple perspectives |
+| **RRF** | Combining multiple retrievals | Consensus + diversity |
+
+**Pro Tip:** Combine Multi-Query Retrieval + RRF for best results on complex questions!
 
 ---
 
