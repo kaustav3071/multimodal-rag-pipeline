@@ -74,7 +74,9 @@ The retrieval pipeline handles user queries and generates contextual answers:
 |---------|-------------|
 | 🔄 **Multiple Chunking Methods** | Character-based, Semantic, and Agentic chunking strategies |
 | 🎯 **Semantic Search** | Sentence-Transformers for high-quality embeddings |
-| 💬 **Conversational RAG** | History-aware generation for multi-turn conversations |
+| � **Hybrid Search** | Combines vector (semantic) + BM25 (keyword) for superior accuracy |
+| 🧠 **Reranker (Cross-Encoder)** | Two-stage retrieval with Cohere reranking for precision |
+| �💬 **Conversational RAG** | History-aware generation for multi-turn conversations |
 | 📊 **Rich Document Support** | Process `.txt`, `.pdf`, and structured documents |
 | ⚙️ **Configurable Pipeline** | Customizable chunk sizes, overlap, and retrieval parameters |
 | 🔐 **Environment Management** | Secure API key handling with `.env` configuration |
@@ -101,10 +103,18 @@ RAG/
 ├── 📄 multi_query_retrieval.py     # Multi-query expansion with LLM
 ├── 📄 reciprocal_rank_fusion.py    # RRF for combining multi-query results
 │
-├── 📁 images/                      # Visual documentation and diagrams
+├── � hybrid_search.ipynb          # Hybrid search demo (Vector + BM25)
+├── 📓 reranker.ipynb               # Reranker cross-encoder demo (Cohere)
+│
+├── �📁 images/                      # Visual documentation and diagrams
 │   ├── rrf_simple_explanation.png # RRF concept visualization
 │   ├── rrf_k60_example.png        # RRF calculation with k=60
-│   └── rrf_key_takeaways.png      # RRF benefits summary
+│   ├── rrf_key_takeaways.png      # RRF benefits summary
+│   ├── hybrid_search_flow.png     # Hybrid search architecture
+│   ├── reranker_cross_encoder.png # Cross-encoder mechanism
+│   ├── reranker_two_stage_strategy.png # Two-stage retrieval strategy
+│   ├── reranker_why_needed.png    # Why rerankers are necessary
+│   └── reranker_comparison.png    # Before/after reranking comparison
 │
 ├── 📁 docs/
 │   ├── google.txt                 # Google company information
@@ -171,6 +181,9 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 # OpenRouter Configuration (for Multi-Query Retrieval)
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Cohere Configuration (for Reranking)
+COHERE_API_KEY=your_cohere_api_key_here
 
 # Optional: Model Configuration
 OPENAI_MODEL=gpt-4-turbo-preview
@@ -335,13 +348,37 @@ python "RAG pipeline/history_aware_generation.py"
 - 🧠 Context-aware follow-up questions
 - 🔄 Automatic conversation history management
 
-### 8️⃣ Jupyter Notebook Demo
+### 8️⃣ Jupyter Notebook Demos
 
-Explore the interactive demo:
+Explore the interactive demos:
+
+**Multimodal RAG:**
 
 ```bash
 jupyter notebook multi_modal_rag.ipynb
 ```
+
+**Hybrid Search (Vector + BM25):**
+
+```bash
+jupyter notebook hybrid_search.ipynb
+```
+
+**Features:**
+- 🔍 Compare vector-only vs BM25-only vs hybrid retrieval
+- 📊 See real-time performance differences
+- 🎯 Test with various query types (semantic, keyword, mixed)
+
+**Reranker (Cross-Encoder):**
+
+```bash
+jupyter notebook reranker.ipynb
+```
+
+**Features:**
+- 🧠 Demonstrates two-stage retrieval strategy
+- 📈 Shows before/after reranking comparison
+- ✨ Uses Cohere's rerank-english-v3.0 model
 
 ---
 
@@ -765,6 +802,264 @@ fused_results = reciprocal_rank_fusion(all_retrieval_results, k=60)
 | **RRF** | Combining multiple retrievals | Consensus + diversity |
 
 **Pro Tip:** Combine Multi-Query Retrieval + RRF for best results on complex questions!
+
+---
+
+### Method 6: Hybrid Search (Vector + BM25)
+
+**File:** `hybrid_search.ipynb`
+
+Hybrid search combines the strengths of semantic search (vector embeddings) and keyword search (BM25) to achieve superior retrieval accuracy. This ensemble approach leverages the complementary nature of dense and sparse retrieval methods.
+
+#### 🎯 How Hybrid Search Works
+
+![Hybrid Search Flow](images/hybrid_search_flow.png)
+
+**The Two Retrieval Methods:**
+
+1. **Vector Retriever (Dense/Semantic Search)**
+   - Uses sentence embeddings to understand semantic meaning
+   - Excellent for conceptual queries and paraphrased questions
+   - Captures context and relationships between words
+   - Model: `sentence-transformers/all-MiniLM-L6-v2`
+
+2. **BM25 Retriever (Sparse/Keyword Search)**
+   - Uses term frequency and inverse document frequency
+   - Excellent for exact matches and specific terms
+   - Captures precise keywords and product names
+   - Based on probabilistic ranking function
+
+**Ensemble Strategy:**
+
+```python
+from langchain_classic.retrievers.ensemble import EnsembleRetriever
+
+hybrid_retriever = EnsembleRetriever(
+    retrievers=[vector_retriever, bm25_retriever],
+    weights=[0.5, 0.5]  # Equal weighting (adjustable)
+)
+```
+
+#### 💡 Key Benefits of Hybrid Search
+
+| Aspect | Vector Only | BM25 Only | **Hybrid (Best of Both)** |
+|--------|------------|-----------|---------------------------|
+| **Semantic Understanding** | ✅ Excellent | ❌ Limited | ✅ Excellent |
+| **Exact Term Matching** | ❌ Weak | ✅ Excellent | ✅ Excellent |
+| **Handling Synonyms** | ✅ Good | ❌ Poor | ✅ Good |
+| **Product Names/IDs** | ❌ May miss | ✅ Catches | ✅ Catches |
+| **Misspellings** | ✅ Tolerant | ❌ Strict | ✅ Tolerant |
+| **Overall Accuracy** | ⚠️ Medium | ⚠️ Medium | ✅ **High** |
+
+#### 📊 Example Query Performance
+
+**Query:** *"purchase cost 7.5 billion"*
+
+- **Vector Search Strength:** Understands "purchase cost" semantically (acquisition price)
+- **BM25 Search Strength:** Finds exact match for "7.5 billion"
+- **Hybrid Result:** Correctly retrieves "Microsoft acquired GitHub for 7.5 billion dollars"
+
+**Query:** *"electric vehicle manufacturing Cybertruck"*
+
+- **Vector Search Strength:** Understands "electric vehicle manufacturing" concept
+- **BM25 Search Strength:** Finds exact match for "Cybertruck" product name
+- **Hybrid Result:** Returns all relevant Cybertruck production and EV context
+
+#### 🚀 Implementation
+
+```python
+# 1. Setup Vector Retriever
+embedding_model = HuggingFaceEmbeddings(
+    model="sentence-transformers/all-MiniLM-L6-v2"
+)
+vectorstore = Chroma.from_documents(
+    documents=documents,
+    embedding=embedding_model
+)
+vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
+
+# 2. Setup BM25 Retriever
+bm25_retriever = BM25Retriever.from_documents(documents)
+bm25_retriever.k = 10
+
+# 3. Create Hybrid Retriever
+hybrid_retriever = EnsembleRetriever(
+    retrievers=[vector_retriever, bm25_retriever],
+    weights=[0.5, 0.5]
+)
+
+# 4. Retrieve Documents
+results = hybrid_retriever.invoke("your query here")
+```
+
+#### 🎯 Best For:
+
+- ✅ **Mixed queries** - Combining concepts and specific terms
+- ✅ **Product search** - Finding specific items with context
+- ✅ **Financial data** - Combining metrics with company names
+- ✅ **Technical queries** - Balancing jargon and concepts
+- ✅ **General purpose** - Works well across diverse query types
+
+---
+
+### Method 7: Reranking with Cross-Encoders
+
+**File:** `reranker.ipynb`
+
+Reranking is the critical second stage in a high-accuracy RAG pipeline. After retrieving candidate documents using hybrid search, a reranker model analyzes the query-document relationship more deeply to produce a precise final ranking.
+
+#### 🤔 Why Do We Need Reranking?
+
+![Why Reranker is Needed](images/reranker_why_needed.png)
+
+**Embeddings Limitation:**
+
+While vector embeddings and hybrid search excel at casting a wide net to find potentially relevant documents, they have inherent limitations:
+
+**Example Query:** *"How to fix a leaky faucet?"*
+
+- **Chunk A:** "To repair a dripping tap, first turn off the water supply, then remove the handle and replace the worn washer."
+  - **Embedding Score:** 0.82 (high similarity!)
+- **Chunk B:** "Water damage from leaky faucets can cost homeowners thousands in repairs and lead to mold growth."
+  - **Embedding Score:** 0.79 (also high similarity!)
+
+**The Problem:** Both chunks mention "leaky faucets" and score highly, but only Chunk A actually answers the question. Embeddings alone can't distinguish between:
+- ✅ **Direct answers** vs ❌ **Related but unhelpful content**
+
+**The Solution:** Rerankers use cross-encoders that read the query and chunk *together* to understand their true relationship.
+
+#### 🎯 The Two-Stage Strategy
+
+![Two-Stage Strategy Comparison](images/reranker_comparison.png)
+
+**Stage 1: Embeddings (Fast & Broad)**
+
+Purpose: Inexpensive approximation to find candidates
+
+```
+Query → Vector → Compare with 1M+ chunks → Top 100 chunks
+```
+
+**Characteristics:**
+- ⚡ **Fast** - Can search millions of chunks quickly
+- 🌐 **Broad** - Good at finding chunks in the right neighborhood
+- 💰 **Cheap** - Low computational cost per comparison
+- ✅ **Reliable** - Gives good probability of relevance
+
+**BUT:** It's just an approximation. You wouldn't bet your money on the exact ranking.
+
+**Stage 2: Reranker (Precise & Focused)**
+
+![Reranker Two-Stage Strategy](images/reranker_two_stage_strategy.png)
+
+Purpose: Increase probability that top 10 are the absolute best
+
+```
+Query + Each of 25 chunks → Reranker/Cross-encoder → Precise relevance scores
+```
+
+**Characteristics:**
+- 🎯 **Precise** - Actually reads query and chunk together
+- 🧠 **Context-aware** - Understands query intent and relationships
+- 💸 **Expensive** - Higher computational cost, but only for 10-100 chunks usually
+
+**Why This Two-Stage Approach Works:**
+
+1. **Embeddings:** Cast a wide, inexpensive net to find chunk candidates
+2. **Reranker:** Apply slightly more expensive but precise analysis to finalize ranking
+
+*It's like having a screening interview followed by a detailed technical interview - each stage optimized for its purpose.*
+
+#### 🧠 How Does Reranker (Cross-Encoder) Achieve This?
+
+![Reranker Cross-Encoder Mechanism](images/reranker_cross_encoder.png)
+
+**Reranker (Cross-encoder/Joint-processing approach):**
+
+```
+Combined Input: "apple stock price [SEP] Apple trees grow in orchards"
+     ↓ (processed together)
+Cross-encoder analyzes relationship
+     ↓
+Relevance Score: 0.12 (correctly identifies mismatch)
+```
+
+**Advantage:** The reranker model reads both the query and chunk simultaneously, understanding their relationship context.
+
+#### 🚀 Implementation
+
+```python
+from langchain_cohere import CohereRerank
+
+# Step 1: Get initial results from hybrid search
+retrieved_docs = hybrid_retriever.invoke(query)  # Get top 25-50
+
+# Step 2: Rerank using Cohere's cross-encoder model
+reranker = CohereRerank(
+    model="rerank-english-v3.0",
+    top_n=10,  # Final number of documents to return
+    cohere_api_key=os.getenv("COHERE_API_KEY")
+)
+
+reranked_docs = reranker.compress_documents(retrieved_docs, query)
+
+# Step 3: Use top reranked documents for RAG
+top_context = reranked_docs[:5]
+```
+
+#### 📊 Real-World Example
+
+**Query:** *"Tesla financial performance and production updates"*
+
+**Before Reranking (Hybrid Search Top 5):**
+1. Tesla reported record quarterly revenue of $25.2 billion in Q3 2024.
+2. Tesla announced plans to expand Gigafactory production capacity.
+3. Tesla reported strong free cash flow generation of $7.5 billion.
+4. Tesla stock price reached new highs following earnings announcement.
+5. Tesla continues to lead in electric vehicle market share globally.
+
+**After Reranking (Top 5):**
+1. Tesla reported strong free cash flow generation of $7.5 billion. ⬆️
+2. Tesla reported record quarterly revenue of $25.2 billion in Q3 2024. ✓
+3. **Tesla's automotive gross margin improved to 19.3% this quarter.** ⬆️⬆️ (more specific financial metric)
+4. Tesla announced plans to expand Gigafactory production capacity. ⬆️
+5. **Tesla's energy storage business grew 40% year-over-year.** ⬆️⬆️ (quantified performance metric)
+
+**Key Improvements:**
+- ✅ More specific financial metrics moved higher
+- ✅ Quantified performance data prioritized
+- ✅ Better alignment with "performance and production" intent
+
+#### 🎯 Best For:
+
+- ✅ **High-accuracy RAG** - When precision is critical
+- ✅ **Complex queries** - Multi-faceted questions needing nuanced understanding
+- ✅ **Final ranking refinement** - After hybrid/multi-query retrieval
+- ✅ **Reducing false positives** - Filtering semantically similar but irrelevant content
+- ✅ **Production systems** - Where answer quality directly impacts user experience
+
+#### 🔬 When to Use Reranking
+
+| Scenario | Use Reranking? | Rationale |
+|----------|---------------|-----------|
+| **Simple FAQ lookup** | ❌ Optional | Hybrid search may suffice |
+| **Customer-facing chatbot** | ✅ **Yes** | High accuracy needed |
+| **Research/Analysis tool** | ✅ **Yes** | Precision critical |
+| **Large candidate pool (100+)** | ✅ **Yes** | Ranking quality matters |
+| **Cost-sensitive application** | ⚠️ Consider | Balance cost vs accuracy |
+
+#### 💰 Cost-Benefit Analysis
+
+**Reranking Costs:**
+- API calls to Cohere (or self-hosted cross-encoder)
+- Typically $0.001 - $0.005 per rerank request
+
+**Benefits:**
+- 15-30% improvement in answer accuracy
+- Significantly better top-3 result quality
+- Reduced hallucinations from LLM due to better context
+
+**Recommendation:** For production RAG systems where quality matters, reranking ROI is almost always positive.
 
 ---
 
